@@ -1,5 +1,5 @@
 <template>
-  <div class="player" @click="toggleLyrics">
+  <div class="player" @click="handleClick" @mousedown="handleMouseDown">
     <div
       class="progress-bar"
       :class="{
@@ -50,7 +50,11 @@
           </div>
           <div class="like-button">
             <button-icon
-              :title="$t('player.like')"
+              :title="
+                player.isCurrentTrackLiked
+                  ? $t('player.unlike')
+                  : $t('player.like')
+              "
               @click.native="likeATrack(player.currentTrack.id)"
             >
               <svg-icon
@@ -183,12 +187,18 @@ import '@/assets/css/slider.css';
 import ButtonIcon from '@/components/ButtonIcon.vue';
 import VueSlider from 'vue-slider-component';
 import { goToListSource, hasListSource } from '@/utils/playList';
+import { formatTrackTime } from '@/utils/common';
 
 export default {
   name: 'Player',
   components: {
     ButtonIcon,
     VueSlider,
+  },
+  data() {
+    return {
+      mouseDownTarget: null,
+    };
   },
   computed: {
     ...mapState(['player', 'settings', 'data']),
@@ -212,9 +222,24 @@ export default {
         : '';
     },
   },
+  mounted() {
+    this.setupMediaControls();
+    window.addEventListener('keydown', this.handleKeydown);
+  },
+  beforeDestroy() {
+    window.removeEventListener('keydown', this.handleKeydown);
+  },
   methods: {
     ...mapMutations(['toggleLyrics']),
     ...mapActions(['showToast', 'likeATrack']),
+    handleClick(event) {
+      if (event.target == this.mouseDownTarget) {
+        this.toggleLyrics();
+      }
+    },
+    handleMouseDown(event) {
+      this.mouseDownTarget = event.target;
+    },
     playPrevTrack() {
       this.player.playPrevTrack();
     },
@@ -235,10 +260,7 @@ export default {
         : this.$router.push({ name: 'next' });
     },
     formatTrackTime(value) {
-      if (!value) return '';
-      let min = ~~((value / 60) % 60);
-      let sec = (~~(value % 60)).toString().padStart(2, '0');
-      return `${min}:${sec}`;
+      return formatTrackTime(value);
     },
     hasList() {
       return hasListSource();
@@ -267,6 +289,39 @@ export default {
     },
     mute() {
       this.player.mute();
+    },
+
+    setupMediaControls() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => {
+          this.playOrPause();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          this.playOrPause();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          this.playPrevTrack();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          this.playNextTrack();
+        });
+      }
+    },
+
+    handleKeydown(event) {
+      switch (event.code) {
+        case 'MediaPlayPause':
+          this.playOrPause();
+          break;
+        case 'MediaTrackPrevious':
+          this.playPrevTrack();
+          break;
+        case 'MediaTrackNext':
+          this.playNextTrack();
+          break;
+        default:
+          break;
+      }
     },
   },
 };
